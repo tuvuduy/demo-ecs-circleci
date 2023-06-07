@@ -12,5 +12,9 @@ RUN npm install
 #bundle app source code
 
 COPY . ./
+
+# Add file .env
+RUN if test -f ".env"; then echo "File .env exist."; else echo "File .env does not exist." && touch .env && cp .env.default .env; fi
+
 EXPOSE 8080
 CMD ["npm", "start"]

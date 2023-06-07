@@ -1,61 +1,148 @@
+# version: 2.1 # 2.1 config required to use orbs
+
+# orbs:
+#   aws-ecr: circleci/aws-ecr@8.1.2 # use the AWS ECR orb
+#   aws-ecs: circleci/aws-ecs@3.2.0 # use the AWS ECS orb
+#   aws-cli: circleci/aws-cli@3.1.1 # use the AWS CLI orb
+
+# jobs:
+#   verify-deployment:
+#     executor: aws-cli/default
+#     steps:
+#       - aws-cli/install
+#       - aws-cli/setup:
+#           aws-access-key-id: AWS_ACCESS_KEY_ID
+#           aws-region: PARAM_REGION
+#           aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+#       - run:
+#           name: Get last task definition
+#           command: >
+#             TASK_DEFINITION_ARN=$(aws ecs describe-task-definition \
+#                 --task-definition circleci-ecr-demo-svc-2 \
+#                 --output text \
+#                 --query 'taskDefinition.taskDefinitionArn')
+#             echo "export TASK_DEFINITION_ARN='${TASK_DEFINITION_ARN}'" >>
+#             "$BASH_ENV"
+#       - aws-ecs/verify-revision-is-deployed:
+#           family: 'circleci-ecr-demo-td-2'
+#           cluster: 'vuduytu_ecs_demo'
+#           task-definition-arn: '${TASK_DEFINITION_ARN}'
+
+# jobs:
+#   print-a-message:
+#     steps:
+#       - run: echo << parameters.message >>
+
+# workflows:
+#   build-and-deploy:
+#     jobs:
+#       - print-a-message:
+#         message: Hello!
+#       - aws-ecr/build-and-push-image: # orb built-in job
+#           context: aws-dev
+#           create-repo: true
+#           # dockerfile: Dockerfile
+#           path: .
+#           repo: circleci-ecr-demo
+#           extra-build-args: "--build-arg RAILS_ENV=staging"
+          # tag: "${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
+
+      # - aws-ecs/deploy-service-update: # orb built-in job
+      #     name: deploy-development
+      #     requires:
+      #       - aws-ecr/build-and-push-image
+      #     context: aws-dev
+      #     family: "circleci-ecr-demo-td-2"
+      #     cluster: "vuduytu_ecs_demo"
+      #     service-name: "circleci-ecr-demo-service-1"
+      #     container-image-name-updates: "container=circleci-ecr-demo-td-2,tag=latest"
+
+          # requires:
+          #   - aws-ecr/build-and-push-image
+          # context: aws-dev
+          # family: 'circleci-ecr-demo-td-2'
+          # cluster: 'vuduytu_ecs_demo'
+          # container-image-name-updates: 'container=circleci-ecr-demo-td-2,tag=${CIRCLE_SHA1}'
+
+      # - verify-deployment:
+      #     requires:
+      #       - aws-ecs/deploy-service-update
+
 version: 2.1
+
 orbs:
-  aws-ecr: circleci/aws-ecr@8.1.3
-  aws-ecs: circleci/aws-ecs@3.2.0
+  aws-s3: circleci/aws-s3@3.1
+  aws-ecr: circleci/aws-ecr@8.1.2
+
+executors:
+  default-executor:
+    docker:
+      - image: circleci/python:3.8
+
 jobs:
-  test:
-    - run:
-        command:  |
-          echo "123"
+  build:
+    executor: default-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+
+      - run:
+          name: Assume IAM role
+          command: |
+            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
+      - run:
+          name: Retrieve environment variables from S3 bucket
+          command: |
+            aws s3 cp s3://bst-dev-web01/.env.default .
+
+      # - aws-s3/copy:
+      #     aws-access-key-id: AWS_ACCESS_KEY_ID
+      #     aws-region: AWS_REGION
+      #     aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+      #     from: s3://bst-dev-web01/.env.default
+      #     to: .
+
+      # - aws-ecr/build-and-push-image: # orb built-in job
+      #     aws-access-key-id: AWS_ACCESS_KEY_ID
+      #     aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+      #     create-repo: true
+      #     path: .
+      #     region: AWS_DEFAULT_REGION
+      #     registry-id: AWS_ECR_REGISTRY_ID
+      #     repo: circleci-ecr-demo
+      #     tag: "${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
+
+      - setup_remote_docker:
+          version: 20.10.7
+
+      - run:
+          name: Build Docker image
+          command: |
+            docker build -t demo1:latest .
+
+      - run:
+          name: Login to ECR
+          command: |
+            aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin 464868387076.dkr.ecr.ap-northeast-1.amazonaws.com/circleci-ecr-demo
+
+      - run:
+          name: Tag and push Docker image to ECR
+          command: |
+            docker tag demo1:latest 464868387076.dkr.ecr.ap-northeast-1.amazonaws.com/circleci-ecr-demo:latest
+            docker push 464868387076.dkr.ecr.ap-northeast-1.amazonaws.com/circleci-ecr-demo:latest
 
 workflows:
   version: 2
-  test-build-deploy:
+  build-and-push:
     jobs:
-      - test
-      - aws-ecr/build-and-push-image:
-          context: aws-dev
-          create-repo: true
-          dockerfile: Dockerfile
-          path: .
-          repo: "circleci-ecr-demo"
-          tag: "${CIRCLE_BRANCH}_${CIRCLE_SHA1},${CIRCLE_BRANCH}_latest"
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
-                - development
-      - aws-ecs/deploy-service-update:
-          name: deploy-development
-          requires:
-            - aws-ecr/build-and-push-image 
-          family: "circleci-ecr-demo-td-2"
-          cluster-name: "vuduytu_ecs_demo"
-          service-name: "circleci-ecr-demo-svc-2"
-          container-image-name-updates: "container=circleci-ecr-demo-td-2,tag=${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
-          filters:
-            branches:
-              only:
-                - development
-      - approve-deploy:
-          type: approval
-          requires:
-            - aws-ecr/build-and-push-image
-          filters:
-            branches:
-              only:
-                - master
-      - aws-ecs/deploy-service-update:
-          name: deploy-production
-          requires:
-            - approve-deploy
-          family: "circleci-ecr-demo-td-2"
-          cluster-name: "vuduytu_ecs_demo"
-          service-name: "circleci-ecr-demo-svc-2"
-          container-image-name-updates: "container=circleci-ecr-demo-td-2,tag=${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
-          filters:
-            branches:
-              only:
-                - master
+      - build
+
+
