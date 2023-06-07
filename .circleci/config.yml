@@ -25,8 +25,8 @@ workflows:
           filters:
             branches:
               only:
-                - master
-                - development
+                - main
+                - develop
       - aws-ecs/deploy-service-update:
           name: deploy-development
           requires:
@@ -38,7 +38,7 @@ workflows:
           filters:
             branches:
               only:
-                - development
+                - develop
       - approve-deploy:
           type: approval
           requires:
@@ -46,7 +46,7 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - main
       - aws-ecs/deploy-service-update:
           name: deploy-production
           requires:
@@ -58,4 +58,4 @@ workflows:
           filters:
             branches:
               only:
-                - master
+                - main
