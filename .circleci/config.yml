@@ -1,61 +1,15 @@
 version: 2.1
+
 orbs:
   aws-ecr: circleci/aws-ecr@8.1.3
-  aws-ecs: circleci/aws-ecs@3.2.0
-jobs:
-  test:
-    - run:
-        command:  |
-          echo "123"
 
 workflows:
-  version: 2
-  test-build-deploy:
+  build_and_push_image:
     jobs:
-      - test
       - aws-ecr/build-and-push-image:
           context: aws-dev
           create-repo: true
           dockerfile: Dockerfile
           path: .
-          repo: "circleci-ecr-demo"
-          tag: "${CIRCLE_BRANCH}_${CIRCLE_SHA1},${CIRCLE_BRANCH}_latest"
-          requires:
-            - test
-          filters:
-            branches:
-              only:
-                - master
-                - development
-      - aws-ecs/deploy-service-update:
-          name: deploy-development
-          requires:
-            - aws-ecr/build-and-push-image 
-          family: "circleci-ecr-demo-td-2"
-          cluster-name: "vuduytu_ecs_demo"
-          service-name: "circleci-ecr-demo-svc-2"
-          container-image-name-updates: "container=circleci-ecr-demo-td-2,tag=${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
-          filters:
-            branches:
-              only:
-                - development
-      - approve-deploy:
-          type: approval
-          requires:
-            - aws-ecr/build-and-push-image
-          filters:
-            branches:
-              only:
-                - master
-      - aws-ecs/deploy-service-update:
-          name: deploy-production
-          requires:
-            - approve-deploy
-          family: "circleci-ecr-demo-td-2"
-          cluster-name: "vuduytu_ecs_demo"
-          service-name: "circleci-ecr-demo-svc-2"
-          container-image-name-updates: "container=circleci-ecr-demo-td-2,tag=${CIRCLE_BRANCH}_${CIRCLE_SHA1}"
-          filters:
-            branches:
-              only:
-                - master
+          repo: circleci-ecr-demo
+          tag: "$CIRCLE_SHA1"      - master
