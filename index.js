@@ -8,5 +8,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(8080, () => {
-	console.log('App started successfully v3!');
+	console.log('App started successfully v3 !');
 })
